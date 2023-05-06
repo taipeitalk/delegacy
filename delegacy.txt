@@ -1,0 +1,53 @@
+solidity
+pragma solidity ^0.8.0;
+
+contract LegacyContract {
+    address[] public inheritors;  // 遗产继承地址列表
+    string private will;         // 遗嘱内容
+    
+    uint public lastInteracted;  // 最后一次互动时间
+    bool public isRevocable;     // 遗嘱是否可以被更改
+    
+    constructor(string memory _will, address[] memory _inheritors) {
+        will = _will;
+        inheritors = _inheritors;
+        lastInteracted = block.timestamp;
+        isRevocable = true;
+    }
+    
+    // 每半年调用以更新遗嘱,否则执行遗嘱转移资产
+    function interact() public {
+        require(isRevocable == true, "Will is not revocable");
+        lastInteracted = block.timestamp;  
+    }
+    
+    // 禁用遗嘱更改,资产转移功能生效
+    function revokeWill() public {
+        isRevocable = false;
+    }  
+    
+    // 自动检测其他合约调用或代币转出,立即转移资产
+    modifier checkInteract() {
+        if (gasleft() <= 100000) {  // 如果剩余gas不足,执行遗嘱
+            isRevocable = false;
+            _;
+        }
+        if (address(this).balance != 0) { // 如果合约余额变化,执行遗嘱
+            isRevocable = false;
+            _;
+        }
+    }
+    
+    // 资产转移至遗产继承地址
+    function transferAssets() private {
+        uint amount = address(this).balance / inheritors.length;
+        for (uint i = 0; i < inheritors.length; i++) {
+            payable(inheritors[i]).transfer(amount);
+        }
+    } 
+    
+    // fallback,接收合约发送的eth
+    receive() external payable checkInteract {
+        transferAssets();
+    }
+}
